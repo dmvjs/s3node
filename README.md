@@ -75,6 +75,30 @@ req.body     // string | null
 
 ---
 
+## Routing
+
+The filename is the route. `hello.zap` answers `/hello`. `index.zap` answers `/`.
+
+If no exact file matches, the runtime walks up the path until it finds one:
+
+```
+GET /users/123        →  users/123.zap  (exact)
+                      →  users.zap      (fallback)
+                      →  404
+```
+
+The handler always receives the full original path in `req.path`, so it can parse its own segments:
+
+```js
+// users.zap — handles /users/:id
+export default async (req) => {
+  const id = req.path.split('/')[2]
+  return { body: { id } }
+}
+```
+
+---
+
 ## Globals
 
 These are the only names in scope inside a `.zap` file.
