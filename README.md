@@ -213,20 +213,38 @@ Both pages share `lib/page.zap`. Update that one file in S3 — both pages chang
 
 ## Environments
 
-`zap init --env <name>` provisions a fully isolated stack — separate bucket, Lambda, and KV table — for each environment. Prod is the default.
+Each environment is a fully isolated AWS stack — its own S3 bucket, Lambda function, KV table, and URL. `prod` is the default. No flags needed for prod.
 
 ```bash
+# spin up staging (takes ~30 seconds, same as init)
 zap init --env staging
+
+# deploy and test there
 zap deploy --env staging api.zap
-```
+curl https://staging-url.lambda-url.us-east-1.on.aws/api
 
-Each environment gets its own URL. When you're happy with staging, promote to prod:
-
-```bash
+# promote to prod when ready
 zap promote api --from staging --to prod
 ```
 
-That's it. No traffic splitting config. No YAML. Just copy the file across.
+`promote` copies the file from one bucket to the other. The prod URL is live instantly.
+
+`.zaprc` stores each environment under its own key:
+
+```json
+{
+  "prod":    { "bucket": "zap-a3f2b8c1", "url": "https://abc.lambda-url…", … },
+  "staging": { "bucket": "zap-f9e2d4c7", "url": "https://xyz.lambda-url…", … }
+}
+```
+
+Every command accepts `--env`:
+
+```bash
+zap ls --env staging
+zap rollback api --env staging
+zap rm old-handler --env staging
+```
 
 ---
 
