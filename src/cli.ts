@@ -3,7 +3,7 @@ import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client }
 import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { parseCron, upsertCron, removeCron } from './cron'
 
 const s3 = new S3Client({})
@@ -102,6 +102,17 @@ program
     const handlers = Contents.filter(o => o.Key?.endsWith('.zap'))
     if (!handlers.length) return console.log('no handlers deployed')
     handlers.forEach(o => console.log(o.Key!.replace(/\.zap$/, '')))
+  })
+
+program
+  .command('demo')
+  .description('deploy the built-in demo handlers')
+  .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
+  .action(async (opts) => {
+    const b = bucket(opts)
+    const demoDir = resolve(__dirname, '..', 'demo')
+    const files = await walkZap(demoDir, 'demo')
+    await Promise.all(files.map(({ filePath, key }) => deployFile(b, filePath, key)))
   })
 
 program.parse()
