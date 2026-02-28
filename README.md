@@ -263,6 +263,32 @@ No revert commits. No redeploy. The old code is live immediately.
 
 ---
 
+## Observability
+
+Every request emits a structured JSON log line to CloudWatch:
+
+```json
+{"handler":"hello","method":"GET","status":200,"ms":43,"requestId":"abc-123"}
+```
+
+Every cache refresh (S3 fetch) logs the handler, ETag, and last-modified timestamp:
+
+```json
+{"cache":"refresh","handler":"hello","etag":"\"d41d8cd9\"","modified":"2026-02-28T19:35:00.000Z"}
+```
+
+The `requestId` correlates with Lambda's own `REPORT` line, which adds total duration, billed duration, and memory. Nothing to configure — it's all in CloudWatch Logs.
+
+Query with CloudWatch Logs Insights:
+
+```
+filter ispresent(handler)
+| stats avg(ms), count() as reqs by handler
+| sort avg(ms) desc
+```
+
+---
+
 ## CLI
 
 ```
