@@ -36,7 +36,8 @@ export const handler = async (event: Record<string, any>): Promise<unknown> => {
   }
 
   try {
-    const source = await loader(req.path.replace(/^\//, ''))
+    const key = req.path === '/' ? 'index' : req.path.replace(/^\//, '')
+    const source = await loader(key)
     const res = await run(source, req, loader)
     return { statusCode: res.status ?? 200, headers: res.headers, body: serialize(res.body) }
   } catch (err: any) {

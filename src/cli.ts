@@ -115,7 +115,9 @@ program
     const { url } = readConfig()
     const demoDir = resolve(__dirname, '..', 'demo')
     const files = await walkZap(demoDir, 'demo')
-    await Promise.all(files.map(({ filePath, key }) => deployFile(b, filePath, key, url)))
+    const remapped = files.map(f => f.key === 'demo/index.zap' ? { ...f, key: 'index.zap' } : f)
+    await Promise.all(remapped.map(({ filePath, key }) => deployFile(b, filePath, key, url)))
+    if (url) console.log(`\n  → ${url.trim()}`)
   })
 
 program
