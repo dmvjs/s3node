@@ -1,0 +1,22 @@
+{
+  "name": "s3node",
+  "version": "0.1.0",
+  "description": "A JS runtime that serves .zap scripts from S3",
+  "main": "dist/handler.js",
+  "bin": { "zap": "dist/cli.js" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/dev.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3",
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8",
+    "@types/node": "^22",
+    "tsx": "^4",
+    "typescript": "^5"
+  },
+  "private": true
+}
