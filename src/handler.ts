@@ -46,13 +46,27 @@ export const handler = async (event: Record<string, any>, context: { awsRequestI
     body: e.body ?? null,
   }
 
-  const key = req.path === '/' ? 'index' : req.path.replace(/^\//, '')
+  const key = req.path === '/' ? 'index' : req.path.replace(/^\//, '').replace(/\/$/, '')
+
+  const resolve = async (): Promise<{ source: string; handler: string }> => {
+    const segments = key.split('/')
+    for (let i = segments.length; i >= 1; i--) {
+      const candidate = segments.slice(0, i).join('/')
+      try {
+        const source = await loader(candidate)
+        return { source, handler: candidate }
+      } catch (err: any) {
+        if (err.name !== 'NoSuchKey') throw err
+      }
+    }
+    throw Object.assign(new Error(`No handler for ${req.path}`), { name: 'NoSuchKey' })
+  }
 
   try {
-    const source = await loader(key)
+    const { source, handler } = await resolve()
     const res = await run(source, req, loader)
     const status = res.status ?? 200
-    console.log(JSON.stringify({ handler: key, method: req.method, status, ms: Date.now() - start, requestId: context.awsRequestId }))
+    console.log(JSON.stringify({ handler, method: req.method, status, ms: Date.now() - start, requestId: context.awsRequestId }))
     return { statusCode: status, headers: res.headers, body: serialize(res.body) }
   } catch (err: any) {
     const status = err.name === 'NoSuchKey' ? 404 : 500
