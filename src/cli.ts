@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { AddPermissionCommand, LambdaClient, RemovePermissionCommand, UpdateFunctionUrlConfigCommand } from '@aws-sdk/client-lambda'
 import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
@@ -113,6 +114,21 @@ program
     const demoDir = resolve(__dirname, '..', 'demo')
     const files = await walkZap(demoDir, 'demo')
     await Promise.all(files.map(({ filePath, key }) => deployFile(b, filePath, key)))
+  })
+
+program
+  .command('repair')
+  .description('re-apply Lambda Function URL public access permissions')
+  .action(async () => {
+    const cfg = readConfig()
+    const region = cfg.region ?? 'us-east-1'
+    const fn = cfg.functionArn ?? cfg.function ?? 'zap-runtime'
+    const lambda = new LambdaClient({ region })
+    await lambda.send(new UpdateFunctionUrlConfigCommand({ FunctionName: fn, AuthType: 'NONE', Cors: { AllowOrigins: ['*'], AllowMethods: ['*'], AllowHeaders: ['*'] } }))
+    try { await lambda.send(new RemovePermissionCommand({ FunctionName: fn, StatementId: 'public-access' })) } catch {}
+    await lambda.send(new AddPermissionCommand({ FunctionName: fn, StatementId: 'public-access', Action: 'lambda:InvokeFunctionUrl', Principal: '*', FunctionUrlAuthType: 'NONE' }))
+    console.log('✓  permissions repaired')
+    if (cfg.url) console.log(`\n  → ${cfg.url.trim()}\n`)
   })
 
 program.parse()
