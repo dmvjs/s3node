@@ -261,4 +261,4 @@ Deploy `live.zap` once. Then POST JavaScript directly — no S3, no CLI, no depl
 
 ---
 
-**[visitors →](https://zn2qgaqlofvauxmoncf36m4ynq0pfarj.lambda-url.us-east-1.on.aws/demo/visitors)**
+**[live demo →](https://zn2qgaqlofvauxmoncf36m4ynq0pfarj.lambda-url.us-east-1.on.aws/)**
