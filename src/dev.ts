@@ -24,6 +24,7 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
   const zapReq: ZapRequest = {
     method: req.method!,
     path,
+    params: [],
     query: Object.fromEntries(url.searchParams),
     headers: req.headers as Record<string, string>,
     body: await readBody(req),

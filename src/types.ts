@@ -1,6 +1,7 @@
 export interface ZapRequest {
   method: string
   path: string
+  params: string[]
   query: Record<string, string>
   headers: Record<string, string>
   body: string | null

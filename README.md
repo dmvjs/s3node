@@ -58,6 +58,7 @@ export default async (req) => {
 ```ts
 req.method   // 'GET' | 'POST' | ...
 req.path     // '/hello'
+req.params   // ['123'] — path segments beyond the matched handler
 req.query    // { name: 'elliott' }
 req.headers  // { 'content-type': '...' }
 req.body     // string | null
@@ -92,7 +93,7 @@ The handler always receives the full original path in `req.path`, so it can pars
 ```js
 // users.zap — handles /users/:id
 export default async (req) => {
-  const id = req.path.split('/')[2]
+  const [id] = req.params
   return { body: { id } }
 }
 ```

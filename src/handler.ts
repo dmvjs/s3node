@@ -41,6 +41,7 @@ export const handler = async (event: Record<string, any>, context: { awsRequestI
   const req: ZapRequest = {
     method: e.requestContext.http.method,
     path: e.rawPath,
+    params: [],
     query: Object.fromEntries(new URLSearchParams(e.rawQueryString ?? '').entries()),
     headers: e.headers as Record<string, string>,
     body: e.body ?? null,
@@ -64,6 +65,7 @@ export const handler = async (event: Record<string, any>, context: { awsRequestI
 
   try {
     const { source, handler } = await resolve()
+    req.params = key.split('/').slice(handler.split('/').length)
     const res = await run(source, req, loader)
     const status = res.status ?? 200
     console.log(JSON.stringify({ handler, method: req.method, status, ms: Date.now() - start, requestId: context.awsRequestId }))
