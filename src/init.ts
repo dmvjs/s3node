@@ -5,7 +5,7 @@ import {
 import {
   AddPermissionCommand, CreateFunctionCommand, CreateFunctionUrlConfigCommand,
   GetFunctionCommand, GetFunctionUrlConfigCommand, LambdaClient,
-  UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand,
+  RemovePermissionCommand, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand,
   UpdateFunctionUrlConfigCommand, waitUntilFunctionUpdated,
 } from '@aws-sdk/client-lambda'
 import { CreateBucketCommand, HeadBucketCommand, S3Client, type BucketLocationConstraint } from '@aws-sdk/client-s3'
@@ -32,6 +32,17 @@ const policy = (bucket: string) => JSON.stringify({
     { Effect: 'Allow', Action: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:DeleteItem'], Resource: `arn:aws:dynamodb:*:*:table/${TABLE}` },
   ],
 })
+
+async function allowPublicUrl(lambda: LambdaClient, functionArn: string): Promise<void> {
+  try { await lambda.send(new RemovePermissionCommand({ FunctionName: functionArn, StatementId: 'public-access' })) } catch {}
+  await lambda.send(new AddPermissionCommand({
+    FunctionName: functionArn,
+    StatementId: 'public-access',
+    Action: 'lambda:InvokeFunctionUrl',
+    Principal: '*',
+    FunctionUrlAuthType: 'NONE',
+  }))
+}
 
 function step(label: string) {
   process.stdout.write(`  ${label.padEnd(24)}`)
@@ -138,7 +149,6 @@ export async function init(region: string) {
   try {
     const { FunctionUrl } = await lambda.send(new GetFunctionUrlConfigCommand({ FunctionName: FUNCTION }))
     await lambda.send(new UpdateFunctionUrlConfigCommand({ FunctionName: FUNCTION, AuthType: 'NONE', Cors: { AllowOrigins: ['*'], AllowMethods: ['*'], AllowHeaders: ['*'] } }))
-    try { await lambda.send(new AddPermissionCommand({ FunctionName: FUNCTION, StatementId: 'public-access', Action: 'lambda:InvokeFunctionUrl', Principal: '*', FunctionUrlAuthType: 'NONE' })) } catch {}
     url = FunctionUrl!
   } catch (err: any) {
     if (err.name !== 'ResourceNotFoundException') throw err
@@ -147,15 +157,9 @@ export async function init(region: string) {
       AuthType: 'NONE',
       Cors: { AllowOrigins: ['*'], AllowMethods: ['*'], AllowHeaders: ['*'] },
     }))
-    await lambda.send(new AddPermissionCommand({
-      FunctionName: FUNCTION,
-      StatementId: 'public-access',
-      Action: 'lambda:InvokeFunctionUrl',
-      Principal: '*',
-      FunctionUrlAuthType: 'NONE',
-    }))
     url = FunctionUrl!
   }
+  await allowPublicUrl(lambda, functionArn)
   done()
 
   writeFileSync('.zaprc', JSON.stringify({ bucket, function: FUNCTION, table: TABLE, region, url, functionArn }, null, 2))
