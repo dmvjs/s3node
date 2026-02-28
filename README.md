@@ -10,10 +10,19 @@ Like PHP — but JavaScript, serverless, and runs free on AWS forever.
 
 One Lambda function runs permanently. When a request hits `/proxy`, the runtime fetches `proxy.zap` from your S3 bucket, evaluates it, and returns the response. Change the behavior by uploading a new file. That's the whole model.
 
+## Quick start
+
+```bash
+git clone https://github.com/dmvjs/s3node && cd s3node
+npm install
+npm run init
+```
+
+That's it. `init` builds the runtime, creates an S3 bucket, provisions a Lambda with a public URL, and prints the endpoint. AWS credentials must be configured (`aws configure`).
+
 ## Local dev
 
 ```bash
-npm install
 npm run dev         # → http://localhost:3000
 ```
 
@@ -112,13 +121,17 @@ zap rm proxy                # remove a handler
 ## CLI
 
 ```
+zap init                Provision AWS infra and deploy the runtime
 zap deploy <file|dir>   Upload .zap file(s) to S3
 zap rm <name>           Remove a handler
 zap ls                  List deployed handlers
 
 Options:
-  -b, --bucket <bucket>   S3 bucket (or set ZAP_BUCKET env var)
+  -r, --region <region>   AWS region (init, default: us-east-1)
+  -b, --bucket <bucket>   S3 bucket (or set ZAP_BUCKET, or run init)
 ```
+
+After `init`, a `.zaprc` file is saved locally. `deploy`, `rm`, and `ls` read the bucket from it automatically.
 
 ## Cost
 

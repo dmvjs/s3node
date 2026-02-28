@@ -2,14 +2,19 @@
 import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 
 const s3 = new S3Client({})
 
+function readConfig(): Record<string, string> {
+  try { return JSON.parse(readFileSync('.zaprc', 'utf8')) } catch { return {} }
+}
+
 function bucket(opts: { bucket?: string }): string {
-  const b = opts.bucket ?? process.env.ZAP_BUCKET
+  const b = opts.bucket ?? process.env.ZAP_BUCKET ?? readConfig().bucket
   if (!b) {
-    console.error('error: bucket required (--bucket or ZAP_BUCKET)')
+    console.error('error: bucket required (--bucket, ZAP_BUCKET, or run: npm run init)')
     process.exit(1)
   }
   return b
@@ -25,6 +30,15 @@ const program = new Command()
   .name('zap')
   .description('Deploy .zap handlers to S3')
   .version('0.1.0')
+
+program
+  .command('init')
+  .description('provision AWS infrastructure and deploy the runtime')
+  .option('-r, --region <region>', 'AWS region', 'us-east-1')
+  .action(async (opts) => {
+    const { init } = await import('./init')
+    await init(opts.region)
+  })
 
 program
   .command('deploy <path>')
