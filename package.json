@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/dmvjs/s3node.git"
+    "url": "git+https://github.com/dmvjs/s3node.git"
   },
   "homepage": "https://github.com/dmvjs/s3node",
   "license": "MIT",
