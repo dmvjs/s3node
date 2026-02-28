@@ -11,7 +11,9 @@ import { CreateBucketCommand, HeadBucketCommand, S3Client, type BucketLocationCo
 import { CreateTableCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 const ROLE = 'zap-runtime-role'
 const FUNCTION = 'zap-runtime'
@@ -44,10 +46,13 @@ export async function init(region: string) {
   let config: Record<string, string> = {}
   try { config = JSON.parse(readFileSync('.zaprc', 'utf8')) } catch {}
 
-  // Build
-  let done = step('building runtime')
-  execSync('npx tsc', { stdio: 'pipe' })
-  execSync('zip -j dist/runtime.zip dist/*.js', { stdio: 'pipe' })
+  // Build — compile from source if running in the repo, otherwise use pre-built dist
+  let done = step('packaging runtime')
+  const distDir = join(__dirname, '.')
+  const srcDir = join(__dirname, '..', 'src')
+  if (existsSync(srcDir)) execSync('npx tsc', { stdio: 'pipe' })
+  const zipPath = join(tmpdir(), 'zap-runtime.zip')
+  execSync(`zip -j ${zipPath} ${distDir}/*.js`, { stdio: 'pipe' })
   done()
 
   // Bucket
@@ -100,7 +105,7 @@ export async function init(region: string) {
 
   // Lambda
   done = step('deploying lambda')
-  const zip = readFileSync('dist/runtime.zip')
+  const zip = readFileSync(zipPath)
   const env = { ZAP_BUCKET: bucket, ZAP_TABLE: TABLE }
   let functionArn: string
   try {
