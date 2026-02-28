@@ -318,7 +318,7 @@ One Lambda function runs permanently. Every request:
 4. Calls the exported function with the request
 5. Returns the response
 
-Updating a handler means updating a file in S3. The runtime always reads fresh.
+Updating a handler means updating a file in S3. The runtime caches source in Lambda memory for 5 seconds, then reads fresh. Deploys propagate within 5 seconds on warm containers.
 
 ---
 
