@@ -12,13 +12,16 @@ const loader: Loader = async (name: string): Promise<string> => {
 }
 
 
-export const handler = async (event: Record<string, any>): Promise<unknown> => {
+export const handler = async (event: Record<string, any>, context: { awsRequestId: string }): Promise<unknown> => {
+  const start = Date.now()
+
   // Cron invocation from EventBridge
   if (event?.zap?.cron) {
     try {
       const source = await loader(event.zap.cron)
       const fn = evalModule(source, loader) as () => Promise<void>
       await fn()
+      console.log(JSON.stringify({ type: 'cron', handler: event.zap.cron, ms: Date.now() - start, requestId: context.awsRequestId }))
     } catch (err: any) {
       console.error(`cron error [${event.zap.cron}]:`, err.message)
     }
@@ -35,13 +38,17 @@ export const handler = async (event: Record<string, any>): Promise<unknown> => {
     body: e.body ?? null,
   }
 
+  const key = req.path === '/' ? 'index' : req.path.replace(/^\//, '')
+
   try {
-    const key = req.path === '/' ? 'index' : req.path.replace(/^\//, '')
     const source = await loader(key)
     const res = await run(source, req, loader)
-    return { statusCode: res.status ?? 200, headers: res.headers, body: serialize(res.body) }
+    const status = res.status ?? 200
+    console.log(JSON.stringify({ handler: key, method: req.method, status, ms: Date.now() - start, requestId: context.awsRequestId }))
+    return { statusCode: status, headers: res.headers, body: serialize(res.body) }
   } catch (err: any) {
-    if (err.name === 'NoSuchKey') return { statusCode: 404, body: `No handler for ${req.path}` }
-    return { statusCode: 500, body: err.message }
+    const status = err.name === 'NoSuchKey' ? 404 : 500
+    console.log(JSON.stringify({ handler: key, method: req.method, status, ms: Date.now() - start, requestId: context.awsRequestId }))
+    return { statusCode: status, body: status === 404 ? `No handler for ${req.path}` : err.message }
   }
 }
