@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { AddPermissionCommand, GetFunctionUrlConfigCommand, GetPolicyCommand, LambdaClient, RemovePermissionCommand, UpdateFunctionUrlConfigCommand } from '@aws-sdk/client-lambda'
+import { AddPermissionCommand, GetFunctionCommand, GetFunctionUrlConfigCommand, GetPolicyCommand, InvokeCommand, LambdaClient, RemovePermissionCommand, UpdateFunctionUrlConfigCommand } from '@aws-sdk/client-lambda'
 import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
@@ -126,6 +126,11 @@ program
     const lambda = new LambdaClient({ region })
 
     try {
+      const { Configuration } = await lambda.send(new GetFunctionCommand({ FunctionName: fn }))
+      console.log(`state:     ${Configuration?.State} (${Configuration?.StateReason ?? 'ok'})`)
+    } catch (err: any) { console.log('function: not found -', err.message) }
+
+    try {
       const { AuthType, FunctionUrl } = await lambda.send(new GetFunctionUrlConfigCommand({ FunctionName: fn }))
       console.log(`url:       ${FunctionUrl}`)
       console.log(`auth type: ${AuthType}`)
@@ -136,6 +141,14 @@ program
       console.log('\nresource policy:')
       console.log(JSON.stringify(JSON.parse(Policy!), null, 2))
     } catch (err: any) { console.log('\nresource policy: none -', err.message) }
+
+    try {
+      const payload = { version: '2.0', rawPath: '/ping', rawQueryString: '', headers: {}, requestContext: { http: { method: 'GET', path: '/ping' } }, isBase64Encoded: false }
+      const { Payload, FunctionError } = await lambda.send(new InvokeCommand({ FunctionName: fn, Payload: JSON.stringify(payload) }))
+      const result = Payload ? JSON.parse(Buffer.from(Payload).toString()) : null
+      console.log(`\ndirect invoke: ${FunctionError ? 'ERROR' : 'ok'}`)
+      console.log(JSON.stringify(result, null, 2))
+    } catch (err: any) { console.log('\ndirect invoke failed:', err.message) }
   })
 
 program
