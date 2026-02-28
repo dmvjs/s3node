@@ -6,7 +6,7 @@ import {
   AddPermissionCommand, CreateFunctionCommand, CreateFunctionUrlConfigCommand,
   GetFunctionCommand, GetFunctionUrlConfigCommand, LambdaClient,
   UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand,
-  UpdateFunctionUrlConfigCommand,
+  UpdateFunctionUrlConfigCommand, waitUntilFunctionUpdated,
 } from '@aws-sdk/client-lambda'
 import { CreateBucketCommand, HeadBucketCommand, S3Client, type BucketLocationConstraint } from '@aws-sdk/client-s3'
 import { CreateTableCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb'
@@ -112,7 +112,9 @@ export async function init(region: string) {
   try {
     const { Configuration } = await lambda.send(new GetFunctionCommand({ FunctionName: FUNCTION }))
     functionArn = Configuration!.FunctionArn!
+    await waitUntilFunctionUpdated({ client: lambda, maxWaitTime: 60 }, { FunctionName: FUNCTION })
     await lambda.send(new UpdateFunctionCodeCommand({ FunctionName: FUNCTION, ZipFile: zip }))
+    await waitUntilFunctionUpdated({ client: lambda, maxWaitTime: 60 }, { FunctionName: FUNCTION })
     await lambda.send(new UpdateFunctionConfigurationCommand({ FunctionName: FUNCTION, Environment: { Variables: env } }))
   } catch (err: any) {
     if (err.name !== 'ResourceNotFoundException') throw err
