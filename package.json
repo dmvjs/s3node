@@ -12,9 +12,11 @@
     "init": "tsx src/cli.ts init"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1000.0",
     "@aws-sdk/client-iam": "^3.1000.0",
     "@aws-sdk/client-lambda": "^3.1000.0",
     "@aws-sdk/client-s3": "^3",
+    "@aws-sdk/lib-dynamodb": "^3.1000.0",
     "commander": "^14.0.3"
   },
   "devDependencies": {

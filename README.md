@@ -55,7 +55,24 @@ req.body     // string | null
 // body can be a string or any JSON-serializable value
 ```
 
-**Built-ins available:** `fetch`, `URL`, `URLSearchParams`, `crypto`, `Buffer`, `console`, `setTimeout`, `process.env`
+**Built-ins available:** `fetch`, `URL`, `URLSearchParams`, `crypto`, `Buffer`, `console`, `setTimeout`, `process.env`, `kv`
+
+**`kv`** — persistent key/value store backed by DynamoDB (always free tier):
+
+```js
+await kv.set('key', { any: 'value' })   // store anything
+await kv.get('key')                      // retrieve it
+await kv.del('key')                      // delete it
+```
+
+```js
+// counter.zap — stateful endpoint, zero config
+export default async (req) => {
+  const count = ((await kv.get('visits')) ?? 0) + 1
+  await kv.set('visits', count)
+  return { body: { visits: count } }
+}
+```
 
 **Importing other `.zap` files** — use `zap(name)` to load any other `.zap` from the same bucket:
 

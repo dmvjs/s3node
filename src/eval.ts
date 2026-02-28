@@ -1,4 +1,5 @@
 import vm from 'node:vm'
+import { kv } from './kv'
 import type { ZapHandler, ZapRequest, ZapResponse } from './types'
 
 export type Loader = (name: string) => Promise<string>
@@ -13,6 +14,7 @@ const BASE_SANDBOX = {
   setTimeout,
   clearTimeout,
   process: { env: process.env },
+  kv,
 }
 
 function evalModule(source: string, loader: Loader): unknown {
