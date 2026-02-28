@@ -179,6 +179,36 @@ export default async (req) => {
 GET https://your-endpoint/proxy?url=https://api.example.com/data
 ```
 
+### Shared layout — imports in action
+
+```js
+// lib/page.zap — shared layout
+export default (title, content) => ({
+  headers: { 'content-type': 'text/html' },
+  body: `<!doctype html><html>...${title}...${content}...</html>`,
+})
+```
+
+```js
+// iss.zap — ISS position, live
+export default async (req) => {
+  const page = await zap('lib/page')
+  const { iss_position } = await (await fetch('http://api.open-notify.org/iss-now.json')).json()
+  return page('ISS', `${iss_position.latitude} / ${iss_position.longitude}`)
+}
+```
+
+```js
+// astros.zap — who's in space right now
+export default async (req) => {
+  const page = await zap('lib/page')
+  const { people } = await (await fetch('http://api.open-notify.org/astros.json')).json()
+  return page('In space', people.map(p => p.name).join(', '))
+}
+```
+
+Both pages share `lib/page.zap`. Update that one file in S3 — both pages change instantly. S3 is the module system.
+
 ---
 
 ## CLI
