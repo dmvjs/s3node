@@ -2,8 +2,6 @@
 
 > Drop a `.zap` file in S3. It becomes an API endpoint.
 
-You already know S3. You've been dropping files in buckets for years. This makes those files executable.
-
 Drop `hello.zap` → GET `/hello` returns a response. Change the file → behavior changes instantly. No redeploy. No CI. No config.
 
 ---
@@ -15,7 +13,7 @@ mkdir my-project && cd my-project
 npx @kirkelliott/zap init
 ```
 
-This provisions everything on your AWS account and prints a URL. Takes about 30 seconds. Requires AWS credentials — run `aws configure` first if you haven't.
+Provisions everything on your AWS account and prints a URL. Takes about 30 seconds. Requires AWS credentials — run `aws configure` first if you haven't.
 
 ```
   packaging runtime       ✓
@@ -47,7 +45,7 @@ zap deploy hello.zap
 
 ## The .zap format
 
-A `.zap` file is a JavaScript module that exports one function. That function handles the request.
+A `.zap` file exports one function. The runtime rewrites `export default` to `module.exports` and runs it in a Node.js `vm` context — isolated from the Lambda environment, with only the globals listed below in scope.
 
 ```js
 export default async (req) => {
@@ -77,20 +75,30 @@ req.body     // string | null
 
 ---
 
-## Built-ins
+## Globals
 
-These are available in every `.zap` file — no imports needed:
+These are the only names in scope inside a `.zap` file.
+
+**Injected by zap:**
+
+| Name | What it does |
+|---|---|
+| `kv` | Persistent key/value storage (DynamoDB-backed) |
+| `zap(name)` | Load another `.zap` from the same S3 bucket |
+
+**Standard Node.js 20 globals passed through:**
 
 | Name | What it does |
 |---|---|
 | `fetch` | HTTP requests |
-| `kv` | Persistent key/value storage |
-| `zap(name)` | Load another `.zap` from the same bucket |
 | `crypto` | Web Crypto API |
 | `URL`, `URLSearchParams` | URL parsing |
 | `Buffer` | Binary data |
+| `setTimeout`, `clearTimeout` | Timers |
 | `console` | Logs to CloudWatch |
-| `process.env` | Environment variables |
+| `process.env` | Environment variables (`process` is not otherwise available) |
+
+`require`, the file system, and the outer Lambda scope are not accessible.
 
 ---
 
@@ -336,15 +344,15 @@ All within the AWS permanent free tier:
 
 ## How it works
 
-One Lambda function runs permanently. Every request:
+One Lambda function (Node.js 20) runs permanently. Every request:
 
-1. Parses the path — `/proxy` → `proxy.zap`
-2. Fetches that file from S3
-3. Evaluates it in a sandboxed JS environment
+1. Parses the path — `/hello` → fetches `hello.zap` from S3
+2. Rewrites `export default` to `module.exports`
+3. Runs the code in a `vm.runInNewContext` sandbox with the globals listed above
 4. Calls the exported function with the request
 5. Returns the response
 
-Updating a handler means updating a file in S3. The runtime caches source in Lambda memory for 5 seconds, then reads fresh. Deploys propagate within 5 seconds on warm containers.
+Source is cached in Lambda memory for 5 seconds. Deploys propagate within 5 seconds on warm containers.
 
 ---
 
