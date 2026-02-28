@@ -8,7 +8,7 @@ import {
   RemovePermissionCommand, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand,
   UpdateFunctionUrlConfigCommand, waitUntilFunctionUpdated,
 } from '@aws-sdk/client-lambda'
-import { CreateBucketCommand, HeadBucketCommand, S3Client, type BucketLocationConstraint } from '@aws-sdk/client-s3'
+import { CreateBucketCommand, HeadBucketCommand, PutBucketVersioningCommand, S3Client, type BucketLocationConstraint } from '@aws-sdk/client-s3'
 import { CreateTableCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -86,6 +86,7 @@ export async function init(region: string) {
     }))
   }
   done(bucket)
+  await s3.send(new PutBucketVersioningCommand({ Bucket: bucket, VersioningConfiguration: { Status: 'Enabled' } }))
 
   // KV table
   done = step('creating kv table')

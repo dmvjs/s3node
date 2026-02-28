@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { AddPermissionCommand, GetFunctionCommand, GetFunctionUrlConfigCommand, GetPolicyCommand, InvokeCommand, LambdaClient, RemovePermissionCommand, UpdateFunctionUrlConfigCommand } from '@aws-sdk/client-lambda'
-import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, ListObjectVersionsCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
@@ -182,6 +182,28 @@ program
     await lambda.send(new AddPermissionCommand({ FunctionName: fn, StatementId: 'public-invoke', Action: 'lambda:InvokeFunction', Principal: '*' }))
     console.log('✓  permissions repaired')
     if (cfg.url) console.log(`\n  → ${cfg.url.trim()}\n`)
+  })
+
+program
+  .command('rollback <name>')
+  .description('restore the previous version of a handler')
+  .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
+  .action(async (name: string, opts) => {
+    const b = bucket(opts)
+    const key = name.endsWith('.zap') ? name : `${name}.zap`
+    const { Versions = [] } = await s3.send(new ListObjectVersionsCommand({ Bucket: b, Prefix: key }))
+    const sorted = Versions
+      .filter(v => v.Key === key)
+      .sort((a, b) => (b.LastModified?.getTime() ?? 0) - (a.LastModified?.getTime() ?? 0))
+    if (sorted.length < 2) {
+      console.error(`no previous version found for ${name}`)
+      process.exit(1)
+    }
+    const prev = sorted[1]
+    const { Body } = await s3.send(new GetObjectCommand({ Bucket: b, Key: key, VersionId: prev.VersionId }))
+    const source = await Body!.transformToString()
+    await s3.send(new PutObjectCommand({ Bucket: b, Key: key, Body: source, ContentType: 'application/javascript' }))
+    console.log(`↩  ${name}  restored to ${prev.LastModified?.toISOString()}`)
   })
 
 program.parse()
