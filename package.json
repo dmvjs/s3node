@@ -1,7 +1,7 @@
 {
-  "name": "s3node",
+  "name": "@dmvjs/zap",
   "version": "0.1.0",
-  "description": "A JS runtime that serves .zap scripts from S3",
+  "description": "Drop a .zap file in S3. It becomes an API endpoint.",
   "main": "dist/handler.js",
   "bin": {
     "zap": "dist/cli.js"
@@ -9,7 +9,22 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/dev.ts",
-    "init": "tsx src/cli.ts init"
+    "init": "tsx src/cli.ts init",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "demo"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dmvjs/s3node.git"
+  },
+  "homepage": "https://github.com/dmvjs/s3node",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1000.0",
@@ -25,6 +40,5 @@
     "@types/node": "^22",
     "tsx": "^4",
     "typescript": "^5"
-  },
-  "private": true
+  }
 }
