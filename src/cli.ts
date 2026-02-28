@@ -34,7 +34,7 @@ async function walkZap(dir: string, prefix = ''): Promise<Array<{ filePath: stri
   return results
 }
 
-async function deployFile(b: string, filePath: string, key: string): Promise<void> {
+async function deployFile(b: string, filePath: string, key: string, baseUrl?: string): Promise<void> {
   const source = await readFile(filePath, 'utf8')
   await s3.send(new PutObjectCommand({ Bucket: b, Key: key, Body: source, ContentType: 'application/javascript' }))
 
@@ -46,7 +46,8 @@ async function deployFile(b: string, filePath: string, key: string): Promise<voi
     await upsertCron(name, cronExpr, functionArn)
     console.log(`+ ${name}  ↻ ${cronExpr}`)
   } else {
-    console.log(`+ ${name}`)
+    const url = baseUrl ? `  → ${baseUrl.replace(/\/$/, '')}/${name}` : ''
+    console.log(`+ ${name}${url}`)
   }
 }
 
@@ -111,9 +112,10 @@ program
   .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
   .action(async (opts) => {
     const b = bucket(opts)
+    const { url } = readConfig()
     const demoDir = resolve(__dirname, '..', 'demo')
     const files = await walkZap(demoDir, 'demo')
-    await Promise.all(files.map(({ filePath, key }) => deployFile(b, filePath, key)))
+    await Promise.all(files.map(({ filePath, key }) => deployFile(b, filePath, key, url)))
   })
 
 program
