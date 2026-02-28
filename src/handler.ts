@@ -12,9 +12,10 @@ const cache = new Map<string, { source: string; at: number }>()
 const loader: Loader = async (name: string): Promise<string> => {
   const hit = cache.get(name)
   if (hit && Date.now() - hit.at < TTL) return hit.source
-  const { Body } = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `${name}.zap` }))
+  const { Body, ETag, LastModified } = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `${name}.zap` }))
   const source = await Body!.transformToString()
   cache.set(name, { source, at: Date.now() })
+  console.log(JSON.stringify({ cache: 'refresh', handler: name, etag: ETag, modified: LastModified?.toISOString() }))
   return source
 }
 
