@@ -3,7 +3,7 @@ import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client }
 import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { basename } from 'node:path'
+import { join } from 'node:path'
 import { parseCron, upsertCron, removeCron } from './cron'
 
 const s3 = new S3Client({})
@@ -19,6 +19,18 @@ function bucket(opts: { bucket?: string }): string {
     process.exit(1)
   }
   return b
+}
+
+async function walkZap(dir: string, prefix = ''): Promise<Array<{ filePath: string; key: string }>> {
+  const entries = await readdir(dir, { withFileTypes: true })
+  const results: Array<{ filePath: string; key: string }> = []
+  for (const entry of entries) {
+    const filePath = join(dir, entry.name)
+    const key = prefix ? `${prefix}/${entry.name}` : entry.name
+    if (entry.isDirectory()) results.push(...await walkZap(filePath, key))
+    else if (entry.name.endsWith('.zap')) results.push({ filePath, key })
+  }
+  return results
 }
 
 async function deployFile(b: string, filePath: string, key: string): Promise<void> {
@@ -59,10 +71,11 @@ program
     const b = bucket(opts)
     const info = await stat(path)
     if (info.isDirectory()) {
-      const files = (await readdir(path)).filter(f => f.endsWith('.zap'))
-      await Promise.all(files.map(f => deployFile(b, `${path}/${f}`, f)))
+      const files = await walkZap(path)
+      await Promise.all(files.map(({ filePath, key }) => deployFile(b, filePath, key)))
     } else {
-      await deployFile(b, path, basename(path))
+      const key = path.replace(/^\.\//, '')
+      await deployFile(b, path, key)
     }
   })
 
