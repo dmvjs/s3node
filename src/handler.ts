@@ -5,10 +5,17 @@ import { serialize, type ZapRequest } from './types'
 
 const s3 = new S3Client({})
 const BUCKET = process.env.ZAP_BUCKET!
+const TTL = 5_000
+
+const cache = new Map<string, { source: string; at: number }>()
 
 const loader: Loader = async (name: string): Promise<string> => {
+  const hit = cache.get(name)
+  if (hit && Date.now() - hit.at < TTL) return hit.source
   const { Body } = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `${name}.zap` }))
-  return Body!.transformToString()
+  const source = await Body!.transformToString()
+  cache.set(name, { source, at: Date.now() })
+  return source
 }
 
 
