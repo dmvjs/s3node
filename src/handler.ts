@@ -1,7 +1,7 @@
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
 import { evalModule, run, type Loader } from './eval'
-import type { ZapRequest } from './types'
+import { serialize, type ZapRequest } from './types'
 
 const s3 = new S3Client({})
 const BUCKET = process.env.ZAP_BUCKET!
@@ -11,16 +11,17 @@ const loader: Loader = async (name: string): Promise<string> => {
   return Body!.transformToString()
 }
 
-function serialize(body: unknown): string {
-  return typeof body === 'string' ? body : JSON.stringify(body)
-}
 
-export const handler = async (event: any): Promise<any> => {
+export const handler = async (event: Record<string, any>): Promise<unknown> => {
   // Cron invocation from EventBridge
   if (event?.zap?.cron) {
-    const source = await loader(event.zap.cron)
-    const fn = evalModule(source, loader) as () => Promise<void>
-    await fn()
+    try {
+      const source = await loader(event.zap.cron)
+      const fn = evalModule(source, loader) as () => Promise<void>
+      await fn()
+    } catch (err: any) {
+      console.error(`cron error [${event.zap.cron}]:`, err.message)
+    }
     return
   }
 

@@ -13,3 +13,7 @@ export interface ZapResponse {
 }
 
 export type ZapHandler = (req: ZapRequest) => ZapResponse | Promise<ZapResponse>
+
+export function serialize(body: unknown): string {
+  return typeof body === 'string' ? body : JSON.stringify(body)
+}

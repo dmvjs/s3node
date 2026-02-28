@@ -19,11 +19,10 @@ function toSchedule(expr: string): string {
   return `cron(${min} ${hour} ${evbDom} ${month} ${evbDow} *)`
 }
 
-const ruleName = (name: string) => `zap-cron-${name.replace(/\//g, '-')}`
-const statementId = (name: string) => `zap-cron-${name.replace(/\//g, '-')}`
+const ruleId = (name: string) => `zap-cron-${name.replace(/\//g, '-')}`
 
 export async function upsertCron(name: string, expr: string, functionArn: string): Promise<void> {
-  const rule = ruleName(name)
+  const rule = ruleId(name)
 
   const { RuleArn } = await eb.send(new PutRuleCommand({
     Name: rule,
@@ -39,19 +38,23 @@ export async function upsertCron(name: string, expr: string, functionArn: string
   try {
     await lambda.send(new AddPermissionCommand({
       FunctionName: functionArn,
-      StatementId: statementId(name),
+      StatementId: ruleId(name),
       Action: 'lambda:InvokeFunction',
       Principal: 'events.amazonaws.com',
       SourceArn: RuleArn,
     }))
-  } catch { /* permission already exists */ }
+  } catch (err: any) {
+    if (err.name !== 'ResourceConflictException') throw err
+  }
 }
 
 export async function removeCron(name: string, functionArn: string): Promise<void> {
-  const rule = ruleName(name)
+  const rule = ruleId(name)
   try {
     await eb.send(new RemoveTargetsCommand({ Rule: rule, Ids: ['zap'] }))
     await eb.send(new DeleteRuleCommand({ Name: rule }))
-    await lambda.send(new RemovePermissionCommand({ FunctionName: functionArn, StatementId: statementId(name) }))
-  } catch { /* rule may not exist */ }
+    await lambda.send(new RemovePermissionCommand({ FunctionName: functionArn, StatementId: ruleId(name) }))
+  } catch (err: any) {
+    if (err.name !== 'ResourceNotFoundException') throw err
+  }
 }

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { run, type Loader } from './eval'
-import type { ZapRequest } from './types'
+import { serialize, type ZapRequest } from './types'
 
 const PORT = Number(process.env.PORT ?? 3000)
 
@@ -15,9 +15,6 @@ function readBody(req: IncomingMessage): Promise<string | null> {
   })
 }
 
-function serialize(body: unknown): string {
-  return typeof body === 'string' ? body : JSON.stringify(body)
-}
 
 const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
   const url = new URL(req.url!, `http://localhost:${PORT}`)

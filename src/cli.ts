@@ -25,7 +25,7 @@ async function deployFile(b: string, filePath: string, key: string): Promise<voi
   const source = await readFile(filePath, 'utf8')
   await s3.send(new PutObjectCommand({ Bucket: b, Key: key, Body: source, ContentType: 'application/javascript' }))
 
-  const name = key.replace('.zap', '')
+  const name = key.replace(/\.zap$/, '')
   const cronExpr = parseCron(source)
   if (cronExpr) {
     const { functionArn } = readConfig()
@@ -75,8 +75,8 @@ program
     const key = name.endsWith('.zap') ? name : `${name}.zap`
     await s3.send(new DeleteObjectCommand({ Bucket: b, Key: key }))
     const { functionArn } = readConfig()
-    if (functionArn) await removeCron(name.replace('.zap', ''), functionArn)
-    console.log(`- ${name.replace('.zap', '')}`)
+    if (functionArn) await removeCron(name.replace(/\.zap$/, ''), functionArn)
+    console.log(`- ${name.replace(/\.zap$/, '')}`)
   })
 
 program
@@ -88,7 +88,7 @@ program
     const { Contents = [] } = await s3.send(new ListObjectsV2Command({ Bucket: b }))
     const handlers = Contents.filter(o => o.Key?.endsWith('.zap'))
     if (!handlers.length) return console.log('no handlers deployed')
-    handlers.forEach(o => console.log(o.Key!.replace('.zap', '')))
+    handlers.forEach(o => console.log(o.Key!.replace(/\.zap$/, '')))
   })
 
 program.parse()

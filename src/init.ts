@@ -7,7 +7,7 @@ import {
   GetFunctionCommand, GetFunctionUrlConfigCommand, LambdaClient,
   UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand,
 } from '@aws-sdk/client-lambda'
-import { CreateBucketCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3'
+import { CreateBucketCommand, HeadBucketCommand, S3Client, type BucketLocationConstraint } from '@aws-sdk/client-s3'
 import { CreateTableCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -47,23 +47,25 @@ export async function init(region: string) {
   // Build
   let done = step('building runtime')
   execSync('npx tsc', { stdio: 'pipe' })
-  execSync('zip -j dist/runtime.zip dist/handler.js dist/eval.js dist/types.js dist/kv.js dist/cron.js', { stdio: 'pipe' })
+  execSync('zip -j dist/runtime.zip dist/*.js', { stdio: 'pipe' })
   done()
 
   // Bucket
   const bucket = config.bucket ?? `zap-${randomBytes(4).toString('hex')}`
   done = step('creating bucket')
-  try { await s3.send(new HeadBucketCommand({ Bucket: bucket })) } catch {
+  try { await s3.send(new HeadBucketCommand({ Bucket: bucket })) } catch (err: any) {
+    if (err.name !== 'NotFound' && err.$metadata?.httpStatusCode !== 404) throw err
     await s3.send(new CreateBucketCommand({
       Bucket: bucket,
-      ...(region !== 'us-east-1' && { CreateBucketConfiguration: { LocationConstraint: region as any } }),
+      ...(region !== 'us-east-1' && { CreateBucketConfiguration: { LocationConstraint: region as BucketLocationConstraint } }),
     }))
   }
   done(bucket)
 
   // KV table
   done = step('creating kv table')
-  try { await dynamo.send(new DescribeTableCommand({ TableName: TABLE })) } catch {
+  try { await dynamo.send(new DescribeTableCommand({ TableName: TABLE })) } catch (err: any) {
+    if (err.name !== 'ResourceNotFoundException') throw err
     await dynamo.send(new CreateTableCommand({
       TableName: TABLE,
       KeySchema: [{ AttributeName: 'k', KeyType: 'HASH' }],
@@ -81,7 +83,8 @@ export async function init(region: string) {
     const { Role } = await iam.send(new GetRoleCommand({ RoleName: ROLE }))
     roleArn = Role!.Arn!
     await iam.send(new PutRolePolicyCommand({ RoleName: ROLE, PolicyName: 'zap-access', PolicyDocument: policy(bucket) }))
-  } catch {
+  } catch (err: any) {
+    if (err.name !== 'NoSuchEntityException') throw err
     isNew = true
     const { Role } = await iam.send(new CreateRoleCommand({ RoleName: ROLE, AssumeRolePolicyDocument: TRUST }))
     roleArn = Role!.Arn!
@@ -105,7 +108,8 @@ export async function init(region: string) {
     functionArn = Configuration!.FunctionArn!
     await lambda.send(new UpdateFunctionCodeCommand({ FunctionName: FUNCTION, ZipFile: zip }))
     await lambda.send(new UpdateFunctionConfigurationCommand({ FunctionName: FUNCTION, Environment: { Variables: env } }))
-  } catch {
+  } catch (err: any) {
+    if (err.name !== 'ResourceNotFoundException') throw err
     const { FunctionArn } = await lambda.send(new CreateFunctionCommand({
       FunctionName: FUNCTION,
       Runtime: 'nodejs20.x',
@@ -126,7 +130,8 @@ export async function init(region: string) {
   try {
     const { FunctionUrl } = await lambda.send(new GetFunctionUrlConfigCommand({ FunctionName: FUNCTION }))
     url = FunctionUrl!
-  } catch {
+  } catch (err: any) {
+    if (err.name !== 'ResourceNotFoundException') throw err
     const { FunctionUrl } = await lambda.send(new CreateFunctionUrlConfigCommand({
       FunctionName: FUNCTION,
       AuthType: 'NONE',
