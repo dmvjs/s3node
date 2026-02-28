@@ -1,13 +1,13 @@
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
-import { run } from './eval'
+import { run, type Loader } from './eval'
 import type { ZapRequest } from './types'
 
 const s3 = new S3Client({})
 const BUCKET = process.env.ZAP_BUCKET!
 
-async function fetchScript(path: string): Promise<string> {
-  const key = `${path.replace(/^\//, '')}.zap`
+const loader: Loader = async (name: string): Promise<string> => {
+  const key = `${name}.zap`
   const { Body } = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }))
   return Body!.transformToString()
 }
@@ -26,8 +26,9 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
   }
 
   try {
-    const source = await fetchScript(req.path)
-    const res = await run(source, req)
+    const name = req.path.replace(/^\//, '')
+    const source = await loader(name)
+    const res = await run(source, req, loader)
     return {
       statusCode: res.status ?? 200,
       headers: res.headers,

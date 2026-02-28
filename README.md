@@ -48,6 +48,23 @@ req.body     // string | null
 
 **Built-ins available:** `fetch`, `URL`, `URLSearchParams`, `crypto`, `Buffer`, `console`, `setTimeout`, `process.env`
 
+**Importing other `.zap` files** — use `zap(name)` to load any other `.zap` from the same bucket:
+
+```js
+// greet.zap
+export default {
+  hello: (name) => `hello ${name}`,
+}
+
+// api.zap
+export default async (req) => {
+  const greet = await zap('greet')
+  return { body: greet.hello(req.query.name ?? 'world') }
+}
+```
+
+S3 is the module registry. `zap('utils/math')` loads `utils/math.zap` from the bucket.
+
 ## Example — CORS proxy
 
 ```js

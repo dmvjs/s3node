@@ -1,9 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { run } from './eval'
+import { run, type Loader } from './eval'
 import type { ZapRequest } from './types'
 
 const PORT = Number(process.env.PORT ?? 3000)
+
+const loader: Loader = (name: string) => readFile(`${name}.zap`, 'utf8')
 
 function readBody(req: IncomingMessage): Promise<string | null> {
   return new Promise((resolve) => {
@@ -32,7 +34,7 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
 
   try {
     const source = await readFile(zapFile, 'utf8')
-    const zapRes = await run(source, zapReq)
+    const zapRes = await run(source, zapReq, loader)
     res.writeHead(zapRes.status ?? 200, zapRes.headers)
     res.end(serialize(zapRes.body))
   } catch (err: any) {
