@@ -6,6 +6,7 @@ import {
   AddPermissionCommand, CreateFunctionCommand, CreateFunctionUrlConfigCommand,
   GetFunctionCommand, GetFunctionUrlConfigCommand, LambdaClient,
   UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand,
+  UpdateFunctionUrlConfigCommand,
 } from '@aws-sdk/client-lambda'
 import { CreateBucketCommand, HeadBucketCommand, S3Client, type BucketLocationConstraint } from '@aws-sdk/client-s3'
 import { CreateTableCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb'
@@ -134,6 +135,8 @@ export async function init(region: string) {
   let url: string
   try {
     const { FunctionUrl } = await lambda.send(new GetFunctionUrlConfigCommand({ FunctionName: FUNCTION }))
+    await lambda.send(new UpdateFunctionUrlConfigCommand({ FunctionName: FUNCTION, AuthType: 'NONE', Cors: { AllowOrigins: ['*'], AllowMethods: ['*'], AllowHeaders: ['*'] } }))
+    try { await lambda.send(new AddPermissionCommand({ FunctionName: FUNCTION, StatementId: 'public-access', Action: 'lambda:InvokeFunctionUrl', Principal: '*', FunctionUrlAuthType: 'NONE' })) } catch {}
     url = FunctionUrl!
   } catch (err: any) {
     if (err.name !== 'ResourceNotFoundException') throw err
