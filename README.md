@@ -211,11 +211,25 @@ Both pages share `lib/page.zap`. Update that one file in S3 — both pages chang
 
 ---
 
+## rollback — undo a deploy
+
+Every `zap deploy` creates a new S3 version. Roll back to the previous one instantly:
+
+```bash
+zap rollback hello
+# ↩  hello  restored to 2026-02-28T19:35:00.000Z
+```
+
+No revert commits. No redeploy. The old code is live immediately.
+
+---
+
 ## CLI
 
 ```
 zap init                        Provision AWS and deploy the runtime
 zap deploy <file|directory>     Upload .zap file(s) to S3
+zap rollback <name>             Restore the previous version of a handler
 zap rm <name>                   Remove a handler (and its cron rule)
 zap ls                          List deployed handlers
 zap demo                        Deploy the built-in demo handlers
