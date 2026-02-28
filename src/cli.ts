@@ -171,10 +171,11 @@ program
     const lambda = new LambdaClient({ region })
     await lambda.send(new UpdateFunctionUrlConfigCommand({ FunctionName: fn, AuthType: 'NONE', Cors: { AllowOrigins: ['*'], AllowMethods: ['*'], AllowHeaders: ['*'] } }))
     try { await lambda.send(new RemovePermissionCommand({ FunctionName: fn, StatementId: 'public-access' })) } catch {}
-    for (const sid of ['public-access', 'FunctionURLAllowPublicAccess']) {
+    for (const sid of ['public-access', 'public-invoke', 'FunctionURLAllowPublicAccess']) {
       try { await lambda.send(new RemovePermissionCommand({ FunctionName: fn, StatementId: sid })) } catch {}
     }
-    await lambda.send(new AddPermissionCommand({ FunctionName: fn, StatementId: 'public-access', Action: 'lambda:InvokeFunctionUrl', Principal: '*' }))
+    await lambda.send(new AddPermissionCommand({ FunctionName: fn, StatementId: 'public-access', Action: 'lambda:InvokeFunctionUrl', Principal: '*', FunctionUrlAuthType: 'NONE' }))
+    await lambda.send(new AddPermissionCommand({ FunctionName: fn, StatementId: 'public-invoke', Action: 'lambda:InvokeFunction', Principal: '*' }))
     console.log('✓  permissions repaired')
     if (cfg.url) console.log(`\n  → ${cfg.url.trim()}\n`)
   })

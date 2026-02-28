@@ -34,13 +34,20 @@ const policy = (bucket: string) => JSON.stringify({
 })
 
 async function allowPublicUrl(lambda: LambdaClient, functionArn: string): Promise<void> {
-  for (const sid of ['public-access', 'FunctionURLAllowPublicAccess']) {
+  for (const sid of ['public-access', 'public-invoke', 'FunctionURLAllowPublicAccess']) {
     try { await lambda.send(new RemovePermissionCommand({ FunctionName: functionArn, StatementId: sid })) } catch {}
   }
   await lambda.send(new AddPermissionCommand({
     FunctionName: functionArn,
     StatementId: 'public-access',
     Action: 'lambda:InvokeFunctionUrl',
+    Principal: '*',
+    FunctionUrlAuthType: 'NONE',
+  }))
+  await lambda.send(new AddPermissionCommand({
+    FunctionName: functionArn,
+    StatementId: 'public-invoke',
+    Action: 'lambda:InvokeFunction',
     Principal: '*',
   }))
 }
