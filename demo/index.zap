@@ -47,7 +47,7 @@ export default async (req) => {
 <body>
 <div class="wrap">
   <h1>zap</h1>
-  <p class="sub">Drop a .zap file in S3. It becomes an endpoint. &mdash; <a href="https://github.com/dmvjs/s3node">github</a> &mdash; <a href="https://npmjs.com/package/@kirkelliott/zap">npm</a></p>
+  <p class="sub">Drop a .zap file in S3. It becomes an endpoint. &mdash; <a href="https://github.com/dmvjs/zap">github</a> &mdash; <a href="https://npmjs.com/package/@kirkelliott/zap">npm</a></p>
 
   <div class="explainer">
     <p>A <strong>.zap file</strong> is a JavaScript file you drop in an S3 bucket. The filename becomes the URL path. The function inside handles the request.</p>

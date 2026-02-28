@@ -24,7 +24,7 @@ export default (title, content) => ({
 <body>
   <h1>${title}</h1>
   <div class="card">${content}</div>
-  <p class="dim">powered by <a href="https://github.com/dmvjs/s3node">zap</a></p>
+  <p class="dim">powered by <a href="https://github.com/dmvjs/zap">zap</a></p>
 </body>
 </html>`,
 })

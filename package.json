@@ -20,9 +20,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dmvjs/s3node.git"
+    "url": "git+https://github.com/dmvjs/zap.git"
   },
-  "homepage": "https://github.com/dmvjs/s3node",
+  "homepage": "https://github.com/dmvjs/zap",
   "license": "MIT",
   "engines": {
     "node": ">=20"
