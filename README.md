@@ -266,3 +266,22 @@ For `@cron` handlers, EventBridge sends `{ zap: { cron: "handler-name" } }` as t
 ---
 
 MIT
+
+---
+
+The file in S3 is just a carrier. You don't need it.
+
+```js
+// live.zap
+export default async (req) => {
+  if (!req.body) return { status: 400, body: 'POST a function' }
+  return { body: await eval(`(${req.body})`)({ kv, fetch }) }
+}
+```
+
+```bash
+curl -X POST https://your-endpoint/live \
+  -d 'async ({ kv }) => kv.get("visits")'
+```
+
+Deploy `live.zap` once. Then POST JavaScript directly — no S3, no CLI, no deploy step. The runtime running inside itself.
