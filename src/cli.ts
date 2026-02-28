@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { AddPermissionCommand, LambdaClient, RemovePermissionCommand, UpdateFunctionUrlConfigCommand } from '@aws-sdk/client-lambda'
+import { AddPermissionCommand, GetFunctionUrlConfigCommand, GetPolicyCommand, LambdaClient, RemovePermissionCommand, UpdateFunctionUrlConfigCommand } from '@aws-sdk/client-lambda'
 import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
@@ -114,6 +114,28 @@ program
     const demoDir = resolve(__dirname, '..', 'demo')
     const files = await walkZap(demoDir, 'demo')
     await Promise.all(files.map(({ filePath, key }) => deployFile(b, filePath, key)))
+  })
+
+program
+  .command('debug')
+  .description('show Lambda function URL auth config and resource-based policy')
+  .action(async () => {
+    const cfg = readConfig()
+    const region = cfg.region ?? 'us-east-1'
+    const fn = cfg.functionArn ?? cfg.function ?? 'zap-runtime'
+    const lambda = new LambdaClient({ region })
+
+    try {
+      const { AuthType, FunctionUrl } = await lambda.send(new GetFunctionUrlConfigCommand({ FunctionName: fn }))
+      console.log(`url:       ${FunctionUrl}`)
+      console.log(`auth type: ${AuthType}`)
+    } catch (err: any) { console.log('function url: not found -', err.message) }
+
+    try {
+      const { Policy } = await lambda.send(new GetPolicyCommand({ FunctionName: fn }))
+      console.log('\nresource policy:')
+      console.log(JSON.stringify(JSON.parse(Policy!), null, 2))
+    } catch (err: any) { console.log('\nresource policy: none -', err.message) }
   })
 
 program
