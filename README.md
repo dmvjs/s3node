@@ -2,24 +2,23 @@
 
 > Drop a `.zap` file in S3. It becomes an API endpoint.
 
-Like PHP — but JavaScript, serverless, and free on AWS forever.
+You already know S3. You've been dropping files in buckets for years. This makes those files executable.
 
-One Lambda function runs permanently as the runtime. When a request arrives at `/proxy`, it fetches `proxy.zap` from your S3 bucket, evaluates it, and returns the response. To change behavior, upload a new file. No redeploy. No CI. No infra changes.
+Drop `hello.zap` → GET `/hello` returns a response. Change the file → behavior changes instantly. No redeploy. No CI. No config.
 
 ---
 
-## Quick start
+## Setup
 
 ```bash
-git clone https://github.com/dmvjs/s3node && cd s3node
-npm install
-npm run init
+mkdir my-project && cd my-project
+npx @kirkelliott/zap init
 ```
 
-`init` provisions the full AWS stack and prints your endpoint URL. Requires AWS credentials (`aws configure`). Takes about 30 seconds.
+This provisions everything on your AWS account and prints a URL. Takes about 30 seconds. Requires AWS credentials — run `aws configure` first if you haven't.
 
 ```
-  building runtime        ✓
+  packaging runtime       ✓
   creating bucket         ✓  zap-a3f2b8c1
   creating kv table       ✓  zap-kv
   configuring iam         ✓
@@ -31,33 +30,38 @@ npm run init
 
 ---
 
-## Local dev
+## Deploy a handler
 
 ```bash
-npm run dev    # → http://localhost:3000
+npx @kirkelliott/zap deploy hello.zap
 ```
 
-Place `.zap` files in the project root. `GET /proxy` maps to `./proxy.zap`. Uses real DynamoDB for `kv` — same table as production.
+Or install the CLI once and drop the `npx`:
+
+```bash
+npm install -g @kirkelliott/zap
+zap deploy hello.zap
+```
 
 ---
 
 ## The .zap format
 
-A `.zap` file exports a default async function. That function is the handler.
+A `.zap` file is a JavaScript module that exports one function. That function handles the request.
 
 ```js
 export default async (req) => {
-  return { status: 200, body: 'hello' }
+  return { body: `hello ${req.query.name ?? 'world'}` }
 }
 ```
 
 ### Request
 
 ```ts
-req.method   // 'GET' | 'POST' | 'PUT' | 'DELETE' | ...
-req.path     // '/proxy'
-req.query    // Record<string, string>  e.g. { url: 'https://...' }
-req.headers  // Record<string, string>
+req.method   // 'GET' | 'POST' | ...
+req.path     // '/hello'
+req.query    // { name: 'elliott' }
+req.headers  // { 'content-type': '...' }
 req.body     // string | null
 ```
 
@@ -67,35 +71,34 @@ req.body     // string | null
 {
   status?:  number                   // default 200
   headers?: Record<string, string>
-  body?:    string | object          // objects are JSON-serialized
+  body?:    string | object          // objects become JSON automatically
 }
 ```
 
-### Built-ins
+---
 
-Everything available globally inside every `.zap` file:
+## Built-ins
 
-| Name | Description |
+These are available in every `.zap` file — no imports needed:
+
+| Name | What it does |
 |---|---|
-| `fetch` | Standard web `fetch` |
-| `kv` | Persistent key/value store (DynamoDB) |
-| `zap(name)` | Import another `.zap` file from S3 |
+| `fetch` | HTTP requests |
+| `kv` | Persistent key/value storage |
+| `zap(name)` | Load another `.zap` from the same bucket |
 | `crypto` | Web Crypto API |
-| `URL`, `URLSearchParams` | URL utilities |
-| `Buffer` | Node.js Buffer |
-| `console` | Logging (goes to CloudWatch) |
-| `setTimeout`, `clearTimeout` | Timers |
+| `URL`, `URLSearchParams` | URL parsing |
+| `Buffer` | Binary data |
+| `console` | Logs to CloudWatch |
 | `process.env` | Environment variables |
 
 ---
 
-## kv — persistent storage
-
-`kv` is a built-in key/value store backed by DynamoDB. No setup, no imports, no config — it's just there.
+## kv — storage that persists
 
 ```js
-await kv.set('key', value)   // value can be string, number, object, array
-await kv.get('key')          // returns the value, or null if not found
+await kv.set('key', value)   // string, number, object, array — anything
+await kv.get('key')          // returns the value, or null
 await kv.del('key')          // delete
 ```
 
@@ -108,54 +111,51 @@ export default async (req) => {
 }
 ```
 
+No database to provision. It's just there.
+
 ---
 
-## zap() — imports
-
-Any `.zap` file can import another using `zap(name)`. S3 is the module registry.
+## zap() — one handler can load another
 
 ```js
-// utils/greet.zap
+// utils/auth.zap
 export default {
-  hello: (name) => `hello ${name}`,
+  verify: (token) => token === process.env.SECRET,
 }
 ```
 
 ```js
 // api.zap
 export default async (req) => {
-  const greet = await zap('utils/greet')
-  return { body: greet.hello(req.query.name ?? 'world') }
+  const auth = await zap('utils/auth')
+  if (!auth.verify(req.headers.authorization))
+    return { status: 401, body: 'unauthorized' }
+  return { body: 'ok' }
 }
 ```
 
-`zap('utils/greet')` fetches `utils/greet.zap` from the same bucket. Imports can be nested — a `.zap` file can `zap()` other `.zap` files. The bucket is the module system.
+S3 is the module system. Drop a file in, import it anywhere.
 
 ---
 
-## @cron — scheduled handlers
+## @cron — run on a schedule
 
-Add `// @cron <expr>` as the first line. When deployed, `zap deploy` automatically creates an EventBridge rule that triggers the handler on schedule.
+First line `// @cron <expr>` turns any handler into a scheduled job. `zap deploy` wires up the EventBridge rule automatically.
 
 ```js
 // @cron 0 * * * *
 export default async () => {
   await kv.set('heartbeat', new Date().toISOString())
-  console.log('tick')
 }
 ```
 
-Standard 5-field cron expressions (`minute hour day month weekday`). `zap rm` removes the EventBridge rule alongside the S3 file.
-
-Cron handlers receive no request argument. All built-ins (`kv`, `fetch`, `zap()`, etc.) are available.
+Standard cron syntax: `minute hour day month weekday`. `zap rm` removes the schedule when you remove the file.
 
 ---
 
 ## Examples
 
 ### CORS proxy
-
-Fetch any remote URL server-side, bypassing browser CORS restrictions.
 
 ```js
 // proxy.zap
@@ -179,89 +179,62 @@ export default async (req) => {
 GET https://your-endpoint/proxy?url=https://api.example.com/data
 ```
 
-### Stateful counter
-
-```js
-// counter.zap
-export default async (req) => {
-  const count = ((await kv.get('visits')) ?? 0) + 1
-  await kv.set('visits', count)
-  return { body: { visits: count } }
-}
-```
-
-### Hourly heartbeat
-
-```js
-// @cron 0 * * * *
-export default async () => {
-  await kv.set('heartbeat', new Date().toISOString())
-}
-```
-
 ---
 
 ## CLI
 
 ```
-zap init                        Provision AWS infra and deploy the runtime
+zap init                        Provision AWS and deploy the runtime
 zap deploy <file|directory>     Upload .zap file(s) to S3
-zap rm <name>                   Remove a handler (and its cron rule if any)
+zap rm <name>                   Remove a handler (and its cron rule)
 zap ls                          List deployed handlers
+zap demo                        Deploy the built-in demo handlers
+zap repair                      Fix Lambda permissions if the URL stops working
 ```
 
-**Options**
-
-```
--r, --region <region>    AWS region for init  (default: us-east-1)
--b, --bucket <bucket>    S3 bucket name       (default: reads from .zaprc)
-```
-
-After `init`, a `.zaprc` file is written to the project root. All subsequent commands read the bucket name and function ARN from it automatically — no flags needed.
+`init` writes a `.zaprc` to the project directory. All other commands read bucket and region from it — no flags needed.
 
 ---
 
-## AWS infrastructure
+## What gets created
 
-Everything provisioned by `npm run init`:
+`zap init` provisions six things on your AWS account:
 
-| Resource | Purpose |
+| Resource | What it is |
 |---|---|
-| S3 bucket | Stores `.zap` files |
-| DynamoDB table (`zap-kv`) | Backs the `kv` built-in |
-| IAM role (`zap-runtime-role`) | Lambda execution role |
-| Lambda function (`zap-runtime`, Node 20) | The runtime |
-| Lambda Function URL | Public HTTPS endpoint — no API Gateway |
-| EventBridge rules | One per `@cron` handler (created on deploy) |
+| S3 bucket | Where your `.zap` files live |
+| DynamoDB table | Backs `kv` |
+| IAM role | Lets Lambda read S3 and write DynamoDB |
+| Lambda function | The runtime that runs your handlers |
+| Lambda Function URL | Your public HTTPS endpoint |
+| EventBridge rules | One per `@cron` handler |
 
 ---
 
 ## Cost
 
-Runs within AWS always-free tier limits at zero cost for typical personal or small-team usage:
+All within the AWS permanent free tier:
 
 | Service | Free tier |
 |---|---|
-| Lambda | 1M requests/month, 400K GB-seconds — permanent |
-| S3 | 5GB storage, 20K GET requests/month — permanent |
-| DynamoDB | 25 WCU/RCU, 25GB storage — permanent |
-| EventBridge | 14M scheduled invocations/month — permanent |
+| Lambda | 1M requests/month, 400K GB-seconds |
+| S3 | 5GB, 20K GET requests/month |
+| DynamoDB | 25 WCU/RCU, 25GB |
+| EventBridge | 14M scheduled invocations/month |
 
 ---
 
 ## How it works
 
-The runtime is a single Lambda function. On each HTTP request:
+One Lambda function runs permanently. Every request:
 
-1. Parse the URL path → derive the S3 key (`/proxy` → `proxy.zap`)
-2. Fetch the `.zap` source from S3
-3. Evaluate it in a `vm` sandbox with the built-in globals
-4. Call the exported handler with the request
-5. Return the response
+1. Parses the path — `/proxy` → `proxy.zap`
+2. Fetches that file from S3
+3. Evaluates it in a sandboxed JS environment
+4. Calls the exported function with the request
+5. Returns the response
 
-For `@cron` handlers, EventBridge sends `{ zap: { cron: "handler-name" } }` as the Lambda payload. The runtime detects this and invokes the handler with no request argument.
-
-`zap(name)` inside a handler triggers the same fetch-and-eval cycle recursively, with the same loader — so the entire module graph lives in S3.
+Updating a handler means updating a file in S3. The runtime always reads fresh.
 
 ---
 
