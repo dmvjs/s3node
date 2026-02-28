@@ -17,7 +17,7 @@ const BASE_SANDBOX = {
   kv,
 }
 
-function evalModule(source: string, loader: Loader): unknown {
+export function evalModule(source: string, loader: Loader): unknown {
   const code = source.replace(/^export\s+default\s+/m, 'module.exports = ')
   const mod = { exports: {} as unknown }
   vm.runInNewContext(code, {

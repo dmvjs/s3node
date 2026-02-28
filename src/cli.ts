@@ -4,6 +4,7 @@ import { Command } from 'commander'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
+import { parseCron, upsertCron, removeCron } from './cron'
 
 const s3 = new S3Client({})
 
@@ -20,10 +21,20 @@ function bucket(opts: { bucket?: string }): string {
   return b
 }
 
-async function upload(bucket: string, filePath: string, key: string): Promise<void> {
-  const body = await readFile(filePath)
-  await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: 'application/javascript' }))
-  console.log(`+ ${key.replace('.zap', '')}`)
+async function deployFile(b: string, filePath: string, key: string): Promise<void> {
+  const source = await readFile(filePath, 'utf8')
+  await s3.send(new PutObjectCommand({ Bucket: b, Key: key, Body: source, ContentType: 'application/javascript' }))
+
+  const name = key.replace('.zap', '')
+  const cronExpr = parseCron(source)
+  if (cronExpr) {
+    const { functionArn } = readConfig()
+    if (!functionArn) { console.error('run npm run init first'); process.exit(1) }
+    await upsertCron(name, cronExpr, functionArn)
+    console.log(`+ ${name}  ↻ ${cronExpr}`)
+  } else {
+    console.log(`+ ${name}`)
+  }
 }
 
 const program = new Command()
@@ -49,9 +60,9 @@ program
     const info = await stat(path)
     if (info.isDirectory()) {
       const files = (await readdir(path)).filter(f => f.endsWith('.zap'))
-      await Promise.all(files.map(f => upload(b, `${path}/${f}`, f)))
+      await Promise.all(files.map(f => deployFile(b, `${path}/${f}`, f)))
     } else {
-      await upload(b, path, basename(path))
+      await deployFile(b, path, basename(path))
     }
   })
 
@@ -63,6 +74,8 @@ program
     const b = bucket(opts)
     const key = name.endsWith('.zap') ? name : `${name}.zap`
     await s3.send(new DeleteObjectCommand({ Bucket: b, Key: key }))
+    const { functionArn } = readConfig()
+    if (functionArn) await removeCron(name.replace('.zap', ''), functionArn)
     console.log(`- ${name.replace('.zap', '')}`)
   })
 

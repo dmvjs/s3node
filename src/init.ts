@@ -47,7 +47,7 @@ export async function init(region: string) {
   // Build
   let done = step('building runtime')
   execSync('npx tsc', { stdio: 'pipe' })
-  execSync('zip -j dist/runtime.zip dist/handler.js dist/eval.js dist/types.js dist/kv.js', { stdio: 'pipe' })
+  execSync('zip -j dist/runtime.zip dist/handler.js dist/eval.js dist/types.js dist/kv.js dist/cron.js', { stdio: 'pipe' })
   done()
 
   // Bucket
@@ -99,12 +99,14 @@ export async function init(region: string) {
   done = step('deploying lambda')
   const zip = readFileSync('dist/runtime.zip')
   const env = { ZAP_BUCKET: bucket, ZAP_TABLE: TABLE }
+  let functionArn: string
   try {
-    await lambda.send(new GetFunctionCommand({ FunctionName: FUNCTION }))
+    const { Configuration } = await lambda.send(new GetFunctionCommand({ FunctionName: FUNCTION }))
+    functionArn = Configuration!.FunctionArn!
     await lambda.send(new UpdateFunctionCodeCommand({ FunctionName: FUNCTION, ZipFile: zip }))
     await lambda.send(new UpdateFunctionConfigurationCommand({ FunctionName: FUNCTION, Environment: { Variables: env } }))
   } catch {
-    await lambda.send(new CreateFunctionCommand({
+    const { FunctionArn } = await lambda.send(new CreateFunctionCommand({
       FunctionName: FUNCTION,
       Runtime: 'nodejs20.x',
       Role: roleArn,
@@ -114,6 +116,7 @@ export async function init(region: string) {
       Timeout: 30,
       MemorySize: 256,
     }))
+    functionArn = FunctionArn!
   }
   done()
 
@@ -140,6 +143,6 @@ export async function init(region: string) {
   }
   done()
 
-  writeFileSync('.zaprc', JSON.stringify({ bucket, function: FUNCTION, table: TABLE, region, url }, null, 2))
+  writeFileSync('.zaprc', JSON.stringify({ bucket, function: FUNCTION, table: TABLE, region, url, functionArn }, null, 2))
   console.log(`\n  → ${url.trim()}\n`)
 }

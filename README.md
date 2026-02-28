@@ -74,6 +74,17 @@ export default async (req) => {
 }
 ```
 
+**Scheduled handlers** — add `// @cron <expr>` at the top. `zap deploy` wires up EventBridge automatically:
+
+```js
+// @cron 0 * * * *
+export default async () => {
+  await kv.set('heartbeat', new Date().toISOString())
+}
+```
+
+Standard 5-field cron expressions. No extra config.
+
 **Importing other `.zap` files** — use `zap(name)` to load any other `.zap` from the same bucket:
 
 ```js
