@@ -9,14 +9,18 @@ import { parseCron, upsertCron, removeCron } from './cron'
 
 const s3 = new S3Client({})
 
-function readConfig(): Record<string, string> {
-  try { return JSON.parse(readFileSync('.zaprc', 'utf8')) } catch { return {} }
+function readConfig(env = 'prod'): Record<string, string> {
+  try {
+    const raw = JSON.parse(readFileSync('.zaprc', 'utf8'))
+    if (raw.bucket) return raw   // old flat format — treat as prod
+    return raw[env] ?? {}
+  } catch { return {} }
 }
 
-function bucket(opts: { bucket?: string }): string {
-  const b = opts.bucket ?? process.env.ZAP_BUCKET ?? readConfig().bucket
+function bucket(opts: { bucket?: string; env?: string }): string {
+  const b = opts.bucket ?? process.env.ZAP_BUCKET ?? readConfig(opts.env).bucket
   if (!b) {
-    console.error('error: bucket required (--bucket, ZAP_BUCKET, or run: npm run init)')
+    console.error('error: bucket required (--bucket, ZAP_BUCKET, or run: zap init)')
     process.exit(1)
   }
   return b
@@ -42,7 +46,7 @@ async function deployFile(b: string, filePath: string, key: string, baseUrl?: st
   const cronExpr = parseCron(source)
   if (cronExpr) {
     const { functionArn } = readConfig()
-    if (!functionArn) { console.error('run npm run init first'); process.exit(1) }
+    if (!functionArn) { console.error('run zap init first'); process.exit(1) }
     await upsertCron(name, cronExpr, functionArn)
     console.log(`+ ${name}  ↻ ${cronExpr}`)
   } else {
@@ -60,15 +64,17 @@ program
   .command('init')
   .description('provision AWS infrastructure and deploy the runtime')
   .option('-r, --region <region>', 'AWS region', 'us-east-1')
+  .option('-e, --env <env>', 'environment name', 'prod')
   .action(async (opts) => {
     const { init } = await import('./init')
-    await init(opts.region)
+    await init(opts.region, opts.env)
   })
 
 program
   .command('deploy <path>')
   .description('upload a .zap file or directory to S3')
   .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
+  .option('-e, --env <env>', 'environment', 'prod')
   .action(async (path: string, opts) => {
     const b = bucket(opts)
     const info = await stat(path)
@@ -82,14 +88,55 @@ program
   })
 
 program
+  .command('promote <name>')
+  .description('copy a handler from one environment to another')
+  .option('--from <env>', 'source environment', 'staging')
+  .option('--to <env>', 'target environment', 'prod')
+  .action(async (name: string, opts) => {
+    const srcCfg = readConfig(opts.from)
+    const dstCfg = readConfig(opts.to)
+    if (!srcCfg.bucket) { console.error(`no config for env: ${opts.from}`); process.exit(1) }
+    if (!dstCfg.bucket) { console.error(`no config for env: ${opts.to}`); process.exit(1) }
+    const key = name.endsWith('.zap') ? name : `${name}.zap`
+    const { Body } = await s3.send(new GetObjectCommand({ Bucket: srcCfg.bucket, Key: key }))
+    const source = await Body!.transformToString()
+    await s3.send(new PutObjectCommand({ Bucket: dstCfg.bucket, Key: key, Body: source, ContentType: 'application/javascript' }))
+    console.log(`↑  ${name}  ${opts.from} → ${opts.to}`)
+  })
+
+program
+  .command('rollback <name>')
+  .description('restore the previous version of a handler')
+  .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
+  .option('-e, --env <env>', 'environment', 'prod')
+  .action(async (name: string, opts) => {
+    const b = bucket(opts)
+    const key = name.endsWith('.zap') ? name : `${name}.zap`
+    const { Versions = [] } = await s3.send(new ListObjectVersionsCommand({ Bucket: b, Prefix: key }))
+    const sorted = Versions
+      .filter(v => v.Key === key)
+      .sort((a, b) => (b.LastModified?.getTime() ?? 0) - (a.LastModified?.getTime() ?? 0))
+    if (sorted.length < 2) {
+      console.error(`no previous version found for ${name}`)
+      process.exit(1)
+    }
+    const prev = sorted[1]
+    const { Body } = await s3.send(new GetObjectCommand({ Bucket: b, Key: key, VersionId: prev.VersionId }))
+    const source = await Body!.transformToString()
+    await s3.send(new PutObjectCommand({ Bucket: b, Key: key, Body: source, ContentType: 'application/javascript' }))
+    console.log(`↩  ${name}  restored to ${prev.LastModified?.toISOString()}`)
+  })
+
+program
   .command('rm <name>')
   .description('remove a handler from S3')
   .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
+  .option('-e, --env <env>', 'environment', 'prod')
   .action(async (name: string, opts) => {
     const b = bucket(opts)
     const key = name.endsWith('.zap') ? name : `${name}.zap`
     await s3.send(new DeleteObjectCommand({ Bucket: b, Key: key }))
-    const { functionArn } = readConfig()
+    const { functionArn } = readConfig(opts.env)
     if (functionArn) await removeCron(name.replace(/\.zap$/, ''), functionArn)
     console.log(`- ${name.replace(/\.zap$/, '')}`)
   })
@@ -98,6 +145,7 @@ program
   .command('ls')
   .description('list deployed handlers')
   .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
+  .option('-e, --env <env>', 'environment', 'prod')
   .action(async (opts) => {
     const b = bucket(opts)
     const { Contents = [] } = await s3.send(new ListObjectsV2Command({ Bucket: b }))
@@ -110,9 +158,10 @@ program
   .command('demo')
   .description('deploy the built-in demo handlers')
   .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
+  .option('-e, --env <env>', 'environment', 'prod')
   .action(async (opts) => {
     const b = bucket(opts)
-    const { url } = readConfig()
+    const { url } = readConfig(opts.env)
     const demoDir = resolve(__dirname, '..', 'demo')
     const files = await walkZap(demoDir, 'demo')
     const remapped = files.map(f => f.key === 'demo/index.zap' ? { ...f, key: 'index.zap' } : f)
@@ -123,8 +172,9 @@ program
 program
   .command('debug')
   .description('show Lambda function URL auth config and resource-based policy')
-  .action(async () => {
-    const cfg = readConfig()
+  .option('-e, --env <env>', 'environment', 'prod')
+  .action(async (opts) => {
+    const cfg = readConfig(opts.env)
     const region = cfg.region ?? 'us-east-1'
     const fn = cfg.functionArn ?? cfg.function ?? 'zap-runtime'
     const lambda = new LambdaClient({ region })
@@ -154,10 +204,9 @@ program
       console.log(JSON.stringify(result, null, 2))
     } catch (err: any) { console.log('\ndirect invoke failed:', err.message) }
 
-    const urlCfg = readConfig()
-    if (urlCfg.url) {
+    if (cfg.url) {
       try {
-        const res = await fetch(urlCfg.url)
+        const res = await fetch(cfg.url)
         console.log(`\nurl fetch: HTTP ${res.status}`)
         console.log('headers:', Object.fromEntries([...res.headers.entries()].filter(([k]) => k.startsWith('x-amzn') || k === 'content-type')))
         console.log('body:', await res.text())
@@ -168,13 +217,13 @@ program
 program
   .command('repair')
   .description('re-apply Lambda Function URL public access permissions')
-  .action(async () => {
-    const cfg = readConfig()
+  .option('-e, --env <env>', 'environment', 'prod')
+  .action(async (opts) => {
+    const cfg = readConfig(opts.env)
     const region = cfg.region ?? 'us-east-1'
     const fn = cfg.functionArn ?? cfg.function ?? 'zap-runtime'
     const lambda = new LambdaClient({ region })
     await lambda.send(new UpdateFunctionUrlConfigCommand({ FunctionName: fn, AuthType: 'NONE', Cors: { AllowOrigins: ['*'], AllowMethods: ['*'], AllowHeaders: ['*'] } }))
-    try { await lambda.send(new RemovePermissionCommand({ FunctionName: fn, StatementId: 'public-access' })) } catch {}
     for (const sid of ['public-access', 'public-invoke', 'FunctionURLAllowPublicAccess']) {
       try { await lambda.send(new RemovePermissionCommand({ FunctionName: fn, StatementId: sid })) } catch {}
     }
@@ -182,28 +231,6 @@ program
     await lambda.send(new AddPermissionCommand({ FunctionName: fn, StatementId: 'public-invoke', Action: 'lambda:InvokeFunction', Principal: '*' }))
     console.log('✓  permissions repaired')
     if (cfg.url) console.log(`\n  → ${cfg.url.trim()}\n`)
-  })
-
-program
-  .command('rollback <name>')
-  .description('restore the previous version of a handler')
-  .option('-b, --bucket <bucket>', 'S3 bucket (or set ZAP_BUCKET)')
-  .action(async (name: string, opts) => {
-    const b = bucket(opts)
-    const key = name.endsWith('.zap') ? name : `${name}.zap`
-    const { Versions = [] } = await s3.send(new ListObjectVersionsCommand({ Bucket: b, Prefix: key }))
-    const sorted = Versions
-      .filter(v => v.Key === key)
-      .sort((a, b) => (b.LastModified?.getTime() ?? 0) - (a.LastModified?.getTime() ?? 0))
-    if (sorted.length < 2) {
-      console.error(`no previous version found for ${name}`)
-      process.exit(1)
-    }
-    const prev = sorted[1]
-    const { Body } = await s3.send(new GetObjectCommand({ Bucket: b, Key: key, VersionId: prev.VersionId }))
-    const source = await Body!.transformToString()
-    await s3.send(new PutObjectCommand({ Bucket: b, Key: key, Body: source, ContentType: 'application/javascript' }))
-    console.log(`↩  ${name}  restored to ${prev.LastModified?.toISOString()}`)
   })
 
 program.parse()

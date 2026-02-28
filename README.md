@@ -211,6 +211,25 @@ Both pages share `lib/page.zap`. Update that one file in S3 — both pages chang
 
 ---
 
+## Environments
+
+`zap init --env <name>` provisions a fully isolated stack — separate bucket, Lambda, and KV table — for each environment. Prod is the default.
+
+```bash
+zap init --env staging
+zap deploy --env staging api.zap
+```
+
+Each environment gets its own URL. When you're happy with staging, promote to prod:
+
+```bash
+zap promote api --from staging --to prod
+```
+
+That's it. No traffic splitting config. No YAML. Just copy the file across.
+
+---
+
 ## rollback — undo a deploy
 
 Every `zap deploy` creates a new S3 version. Roll back to the previous one instantly:
@@ -220,6 +239,8 @@ zap rollback hello
 # ↩  hello  restored to 2026-02-28T19:35:00.000Z
 ```
 
+Works per-environment: `zap rollback hello --env staging`
+
 No revert commits. No redeploy. The old code is live immediately.
 
 ---
@@ -227,13 +248,14 @@ No revert commits. No redeploy. The old code is live immediately.
 ## CLI
 
 ```
-zap init                        Provision AWS and deploy the runtime
-zap deploy <file|directory>     Upload .zap file(s) to S3
-zap rollback <name>             Restore the previous version of a handler
-zap rm <name>                   Remove a handler (and its cron rule)
-zap ls                          List deployed handlers
-zap demo                        Deploy the built-in demo handlers
-zap repair                      Fix Lambda permissions if the URL stops working
+zap init [--env <env>]              Provision AWS and deploy the runtime
+zap deploy <file|dir> [--env <env>] Upload .zap file(s) to S3
+zap promote <name> [--from] [--to]  Copy a handler between environments
+zap rollback <name> [--env <env>]   Restore the previous version of a handler
+zap rm <name> [--env <env>]         Remove a handler (and its cron rule)
+zap ls [--env <env>]                List deployed handlers
+zap demo [--env <env>]              Deploy the built-in demo handlers
+zap repair [--env <env>]            Fix Lambda permissions if the URL stops working
 ```
 
 `init` writes a `.zaprc` to the project directory. All other commands read bucket and region from it — no flags needed.
