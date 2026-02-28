@@ -1,6 +1,7 @@
 /tmp
 /out-tsc
 /dist
+.zaprc
 .DS_Store
 .idea
 
