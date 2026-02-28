@@ -149,6 +149,16 @@ program
       console.log(`\ndirect invoke: ${FunctionError ? 'ERROR' : 'ok'}`)
       console.log(JSON.stringify(result, null, 2))
     } catch (err: any) { console.log('\ndirect invoke failed:', err.message) }
+
+    const urlCfg = readConfig()
+    if (urlCfg.url) {
+      try {
+        const res = await fetch(urlCfg.url)
+        console.log(`\nurl fetch: HTTP ${res.status}`)
+        console.log('headers:', Object.fromEntries([...res.headers.entries()].filter(([k]) => k.startsWith('x-amzn') || k === 'content-type')))
+        console.log('body:', await res.text())
+      } catch (err: any) { console.log('\nurl fetch failed:', err.message) }
+    }
   })
 
 program
