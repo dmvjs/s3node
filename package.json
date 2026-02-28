@@ -1,5 +1,5 @@
 {
-  "name": "@dmvjs/zap",
+  "name": "@kirkelliott/zap",
   "version": "0.1.0",
   "description": "Drop a .zap file in S3. It becomes an API endpoint.",
   "main": "dist/handler.js",
